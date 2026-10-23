@@ -1,9 +1,8 @@
 module "aws_load_balancer_controller_irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "5.30.0"
+  version = "~> 5.39"
 
-  role_name = "aws-load-balancer-controller"
-
+  role_name                              = "aws-load-balancer-controller"
   attach_load_balancer_controller_policy = true
 
   oidc_providers = {
@@ -15,30 +14,41 @@ module "aws_load_balancer_controller_irsa_role" {
 }
 
 resource "helm_release" "aws_load_balancer_controller" {
-  name = "aws-load-balancer-controller"
-
+  name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
   namespace  = "kube-system"
-  version    = "1.4.4"
-
-  set {
-    name  = "replicaCount"
-    value = 1
-  }
+  # version left unpinned so Helm installs the current chart, which tracks
+  # support for the current Kubernetes version.
 
   set {
     name  = "clusterName"
-    value = module.eks.cluster_id
+    value = module.eks.cluster_name
   }
-
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
   set {
     name  = "serviceAccount.name"
     value = "aws-load-balancer-controller"
   }
-
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = module.aws_load_balancer_controller_irsa_role.iam_role_arn
   }
+  set {
+    name  = "region"
+    value = var.region
+  }
+  set {
+    name  = "vpcId"
+    value = module.vpc.vpc_id
+  }
+  set {
+    name  = "replicaCount"
+    value = "1"
+  }
+
+  depends_on = [module.eks]
 }
